@@ -3,25 +3,42 @@
 # init-project.sh — Scaffold a new academic writing project
 #
 # Usage:
-#   ./init-project.sh /path/to/project-directory "Project Name"
+#   ./init-project.sh <project-directory> [project-name] [--outline path/to/outline.md]
 #
-# Creates the directory structure and copies templates for a new
-# academic writing project managed by the academic-writing skill.
+# Creates the directory structure, copies templates, and optionally
+# auto-generates section state files from an existing outline.
 
 set -euo pipefail
 
 # --- Argument parsing ---
 
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <project-directory> [project-name]"
+OUTLINE_PATH=""
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --outline)
+            OUTLINE_PATH="$2"
+            shift 2
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ ${#POSITIONAL_ARGS[@]} -lt 1 ]; then
+    echo "Usage: $0 <project-directory> [project-name] [--outline path/to/outline.md]"
     echo ""
     echo "  project-directory  Path where the project will be created"
     echo "  project-name       Human-readable name (optional, defaults to directory name)"
+    echo "  --outline FILE     Path to existing outline; generates section state files"
     exit 1
 fi
 
-PROJECT_DIR="$1"
-PROJECT_NAME="${2:-$(basename "$PROJECT_DIR")}"
+PROJECT_DIR="${POSITIONAL_ARGS[0]}"
+PROJECT_NAME="${POSITIONAL_ARGS[1]:-$(basename "$PROJECT_DIR")}"
 
 # --- Locate skill root (where templates live) ---
 
@@ -34,6 +51,16 @@ if [ ! -d "$TEMPLATES_DIR" ]; then
     echo "Make sure this script is in the skill's scripts/ directory."
     exit 1
 fi
+
+# --- Portable sed -i (macOS vs Linux) ---
+
+sed_inplace() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
 
 # --- Check if directory already exists ---
 
@@ -82,19 +109,147 @@ copy_if_missing "$TEMPLATES_DIR/project-config.yaml" "$PROJECT_DIR/project-confi
 copy_if_missing "$TEMPLATES_DIR/section-status.md" "$PROJECT_DIR/section-status.md"
 copy_if_missing "$TEMPLATES_DIR/decision-log.md" "$PROJECT_DIR/process/decision-log.md"
 copy_if_missing "$TEMPLATES_DIR/process-journal.md" "$PROJECT_DIR/process/process-journal.md"
+copy_if_missing "$TEMPLATES_DIR/genai-disclosure.md" "$PROJECT_DIR/process/genai-disclosure.md"
 echo ""
 
 # --- Inject project name into config ---
 
 if [ -f "$PROJECT_DIR/project-config.yaml" ]; then
-    sed -i "s/^project_name: \"\"/project_name: \"$PROJECT_NAME\"/" "$PROJECT_DIR/project-config.yaml"
-    sed -i "s|^working_directory: \"\"|working_directory: \"$PROJECT_DIR\"|" "$PROJECT_DIR/project-config.yaml"
+    sed_inplace "s/^project_name: \"\"/project_name: \"$PROJECT_NAME\"/" "$PROJECT_DIR/project-config.yaml"
+    sed_inplace "s|^working_directory: \"\"|working_directory: \"$PROJECT_DIR\"|" "$PROJECT_DIR/project-config.yaml"
 fi
 
-# --- Create placeholder files ---
+# --- Auto-detect platform and set recommended defaults ---
 
-if [ ! -f "$PROJECT_DIR/outline.md" ]; then
-    cat > "$PROJECT_DIR/outline.md" << 'OUTLINE'
+detect_platform() {
+    if [ -n "${CLAUDE_CODE_SESSION:-}" ] || [ -d "$HOME/.claude" ]; then
+        echo "claude-code"
+    elif [ -n "${COWORK_SESSION:-}" ] || [ -d "/sessions" ]; then
+        echo "cowork"
+    else
+        echo "manual"
+    fi
+}
+
+DETECTED_PLATFORM=$(detect_platform)
+if [ -f "$PROJECT_DIR/project-config.yaml" ]; then
+    sed_inplace "s/^platform: \"manual\"/platform: \"$DETECTED_PLATFORM\"/" "$PROJECT_DIR/project-config.yaml"
+    echo "Detected platform: $DETECTED_PLATFORM"
+fi
+
+# --- Auto-generate section state files from outline ---
+
+generate_section_states() {
+    local outline_file="$1"
+    local state_dir="$2"
+    local status_file="$3"
+    local section_template="$TEMPLATES_DIR/section-state.md"
+    local today
+    today=$(date +%Y-%m-%d)
+
+    if [ ! -f "$section_template" ]; then
+        echo "  Warning: section-state.md template not found, skipping state generation"
+        return
+    fi
+
+    echo "Generating section state files from outline:"
+
+    # Extract ## headings from the outline (top-level sections)
+    local section_num=0
+    local status_entries=""
+
+    while IFS= read -r line; do
+        # Match lines starting with ## (but not ### or deeper)
+        if [[ "$line" =~ ^##[[:space:]]+(.+)$ ]] && [[ ! "$line" =~ ^### ]]; then
+            local section_name="${BASH_REMATCH[1]}"
+            # Clean the section name for use as filename
+            local safe_name
+            safe_name=$(echo "$section_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
+
+            local state_file="$state_dir/${safe_name}.md"
+
+            if [ ! -f "$state_file" ]; then
+                cp "$section_template" "$state_file"
+                # Replace placeholder with actual section name
+                sed_inplace "s/\[Section Name\]/$section_name/g" "$state_file"
+                sed_inplace "s/\[DATE\]/$today/g" "$state_file"
+                echo "  Created: state/${safe_name}.md"
+            else
+                echo "  Skipped (exists): state/${safe_name}.md"
+            fi
+
+            # Build status table entry
+            status_entries="${status_entries}| ${section_num} | ${section_name} | not-started | | |\n"
+            section_num=$((section_num + 1))
+        fi
+    done < "$outline_file"
+
+    # Update section-status.md with actual sections
+    if [ -f "$status_file" ] && [ -n "$status_entries" ]; then
+        # Replace the placeholder table rows
+        local placeholder="| 0 | Introduction | not-started | | |
+| 1 | \[Section Name\] | not-started | | |
+| 2 | \[Section Name\] | not-started | | |
+| 3 | \[Section Name\] | not-started | | |
+| 4 | Conclusion | not-started | | |"
+
+        # Write new status file with actual sections
+        cat > "$status_file" << STATUSEOF
+# Section Status
+
+Overview of all sections and their current phase. Updated at the end of each session.
+
+## Status Key
+
+| Phase | Meaning |
+|-------|---------|
+| \`not-started\` | Section exists in outline but work hasn't begun |
+| \`orientation\` | Reviewing outline, discussing argument, confirmation bias check |
+| \`reference-work\` | Triaging references, reading, extracting, verifying citations |
+| \`drafting\` | Writing prose iteratively with author |
+| \`integration\` | Approved prose being added to compiled draft, decisions logged |
+| \`complete\` | Section finished and integrated |
+| \`revision-needed\` | Completed but flagged for revision (from flow review or other feedback) |
+
+---
+
+## Sections
+
+| # | Section | Phase | Last Worked | Notes |
+|---|---------|-------|-------------|-------|
+$(echo -e "$status_entries")
+---
+
+## Flow Review
+
+| Date | Status | Notes |
+|------|--------|-------|
+| | [not-done / in-progress / complete] | |
+STATUSEOF
+        echo ""
+        echo "  Updated section-status.md with $section_num sections from outline"
+    fi
+}
+
+# If --outline was provided, copy it and generate state files
+if [ -n "$OUTLINE_PATH" ]; then
+    if [ ! -f "$OUTLINE_PATH" ]; then
+        echo "Error: Outline file not found at $OUTLINE_PATH"
+        exit 1
+    fi
+
+    # Copy outline to project if not already there
+    if [ ! -f "$PROJECT_DIR/outline.md" ]; then
+        cp "$OUTLINE_PATH" "$PROJECT_DIR/outline.md"
+        echo "Copied outline from: $OUTLINE_PATH"
+    fi
+
+    generate_section_states "$PROJECT_DIR/outline.md" "$PROJECT_DIR/state" "$PROJECT_DIR/section-status.md"
+    echo ""
+else
+    # Create placeholder outline
+    if [ ! -f "$PROJECT_DIR/outline.md" ]; then
+        cat > "$PROJECT_DIR/outline.md" << 'OUTLINE'
 # Paper Outline
 
 ## Introduction
@@ -113,9 +268,14 @@ if [ ! -f "$PROJECT_DIR/outline.md" ]; then
 
 [Conclusion outline]
 OUTLINE
-    echo "Created: outline.md (placeholder — replace with your outline)"
+        echo "Created: outline.md (placeholder — replace with your outline)"
+        echo ""
+        echo "Tip: Re-run with --outline to auto-generate section state files:"
+        echo "  $0 $PROJECT_DIR --outline path/to/your/outline.md"
+    fi
 fi
 
+# Create style guide placeholder
 if [ ! -f "$PROJECT_DIR/style-guide.md" ]; then
     cat > "$PROJECT_DIR/style-guide.md" << 'STYLE'
 # Style Guide
@@ -142,7 +302,12 @@ echo "--- Project scaffolded successfully ---"
 echo ""
 echo "Next steps:"
 echo "  1. Edit project-config.yaml with your project details"
-echo "  2. Replace outline.md with your actual paper outline"
-echo "  3. Start a session and tell your AI assistant:"
+if [ -z "$OUTLINE_PATH" ]; then
+    echo "  2. Replace outline.md with your actual paper outline"
+    echo "     Then re-run: $0 $PROJECT_DIR --outline $PROJECT_DIR/outline.md"
+    echo "  3. Start a session and tell your AI assistant:"
+else
+    echo "  2. Start a session and tell your AI assistant:"
+fi
 echo "     'Let's work on my paper — the project config is at $PROJECT_DIR/project-config.yaml'"
 echo ""

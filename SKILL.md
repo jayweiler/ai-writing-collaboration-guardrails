@@ -144,6 +144,8 @@ Mark the section's current phase in `section-status.md`.
 
 ## Platform Configuration and Permissions
 
+The skill defaults to **automatic mode**: transcript archival enabled, decision extraction set to auto, session log access enabled with prompt-based permissions. On first session, the user is asked once for consent; after that, the skill remembers their choice.
+
 When the skill first loads for a project, check the `platform` and `session_log_access` config fields:
 
 ```yaml
@@ -154,12 +156,45 @@ session_log_access:
   permissions: prompt     # prompt | granted | denied
 ```
 
-- If `permissions: prompt`, ask the user on first session: "This skill can automatically archive session transcripts for process documentation. This requires read access to [path]. Grant access?" Respect the answer and update the config.
-- If `permissions: granted`, proceed with auto-archival.
-- If `permissions: denied`, fall back to manual reminders.
-- If `platform: manual`, skip log access entirely and remind the author to save transcripts.
+### Permission Flow
+
+- If `permissions: prompt`, ask the user on first session: "This skill can automatically archive session transcripts and extract editorial decisions for process documentation. This requires read access to [path]. Grant access?" Respect the answer and **update the config file** so the question isn't repeated.
+- If `permissions: granted`, proceed with auto-archival and auto-extraction.
+- If `permissions: denied`, fall back gracefully:
+  - `decision_extraction` behaves as `prompted` (asks the author what decisions were made)
+  - `auto_archive_transcript` falls back to manual reminders
+  - No error, no repeated asks — the skill just works at a lower automation level
+- If `platform: manual`, skip log access entirely regardless of other settings. Remind the author to save transcripts.
+
+### Fallback Principle
+
+Every automated feature degrades gracefully to a manual equivalent. The skill never fails because permissions are denied — it just asks the human to do what the automation would have done. This means a user can deny all permissions and still get the full process enforcement, just with more manual steps.
 
 The skill should never access session logs without the user's explicit knowledge and consent.
+
+---
+
+## Guardrail Overrides
+
+When the author chooses to proceed despite a guardrail flag (e.g., representation audit gaps in strict mode, an unverified citation they want to keep, a counter-search they choose to skip), the override is **always logged** — never silently passed.
+
+### Override Protocol
+
+1. **Name the guardrail** that was triggered and what it flagged
+2. **State the author's decision** and their reasoning
+3. **Log to the decision log** with the tag `[guardrail-override]` so overrides are searchable
+4. **Proceed** — the author's judgment is final, but it's on the record
+
+Example decision log entry:
+```
+### 2026-03-12 — Section 2: Reference Work
+**[guardrail-override]** Representation audit flagged zero Global South sources.
+Author decision: Proceed to drafting. Reasoning: "The section discusses US regulatory
+frameworks specifically — Global South perspectives are addressed in Section 4."
+Who drove it: Author override of guardrail flag.
+```
+
+This is not punitive. The point is that the process is transparent and auditable. An override with documented reasoning is a better outcome than a guardrail quietly ignored.
 
 ---
 

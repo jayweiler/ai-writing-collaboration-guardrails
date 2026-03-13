@@ -1,0 +1,37 @@
+# Project-level files generated when the skill is used
+# (These live in user projects, not in the skill repo itself,
+# but are listed here in case someone initializes a project
+# inside the skill directory.)
+
+# Session transcripts may contain sensitive content
+session_transcripts/
+
+# Per-project state files (generated, not part of the skill)
+state/
+
+# Draft files
+drafts/
+
+# Process docs (generated per-project)
+process/
+
+# Reference notes (per-project)
+# Note: references/ in the skill repo contains skill reference docs,
+# but in a project directory it contains per-reference notes.
+# The skill's own references/ is tracked by git.
+
+# Project config with potentially sensitive paths
+# (template is tracked; filled-in copies are not)
+project-config.yaml
+!templates/project-config.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

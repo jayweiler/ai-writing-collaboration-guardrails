@@ -91,6 +91,15 @@ See `bias-guardrails.md` for the full protocol. Key points:
 - Source diversity is an explicit triage criterion
 - Acknowledge structural limits of AI training data honestly
 
+### Guardrail Overrides
+
+If the author chooses to proceed past any guardrail flag (representation gaps, unverified citation, skipped counter-search), log the override:
+1. Name which guardrail was triggered
+2. Record the author's reasoning
+3. Append to the decision log tagged `[guardrail-override]`
+
+The author's judgment is final, but overrides are always on the record. This applies to all phases, not just reference work.
+
 ---
 
 ## Phase 3: Drafting
