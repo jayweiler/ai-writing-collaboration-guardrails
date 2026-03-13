@@ -160,8 +160,8 @@ generate_section_states() {
 
     while IFS= read -r line; do
         # Match lines starting with ## (but not ### or deeper)
-        if [[ "$line" =~ ^##[[:space:]]+(.+)$ ]] && [[ ! "$line" =~ ^### ]]; then
-            local section_name="${BASH_REMATCH[1]}"
+        if [[ "$line" =~ ^##[[:space:]]+ ]] && [[ ! "$line" =~ ^### ]]; then
+            local section_name="${line#\#\# }"
             # Clean the section name for use as filename
             local safe_name
             safe_name=$(echo "$section_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//')
