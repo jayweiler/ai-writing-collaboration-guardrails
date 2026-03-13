@@ -1,4 +1,4 @@
-# Academic Writing Process Skill
+# AI Writing Collaboration Guardrails
 
 A process enforcement skill for responsible AI-assisted academic writing. Designed for use with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Cowork](https://claude.ai).
 
@@ -6,13 +6,13 @@ A process enforcement skill for responsible AI-assisted academic writing. Design
 
 **1. Install** (Claude Code):
 ```bash
-/plugin install https://github.com/jayweiler/academic-writing-skill
+/plugin install https://github.com/jayweiler/ai-writing-collaboration-guardrails
 ```
 
 **2. Initialize a project:**
 ```bash
 # Find the skill (plugin install puts it in ~/.claude/plugins/<repo-name>/)
-~/.claude/plugins/academic-writing-skill/skills/academic-writing/scripts/init-project.sh \
+~/.claude/plugins/ai-writing-collaboration-guardrails/skills/academic-writing/scripts/init-project.sh \
   ~/my-paper "My Paper Title" --outline ~/my-paper/outline.md
 ```
 
@@ -60,14 +60,14 @@ The skill enforces a structured, transparent process across the full lifecycle o
 Install directly from GitHub as a Claude Code plugin:
 
 ```bash
-/plugin install https://github.com/jayweiler/academic-writing-skill
+/plugin install https://github.com/jayweiler/ai-writing-collaboration-guardrails
 ```
 
 The skill becomes available as `/academic-writing:academic-writing` in any Claude Code session.
 
 ### Cowork (Claude Desktop)
 
-**Easiest:** Download the `.skill` file from [Releases](https://github.com/jayweiler/academic-writing-skill/releases) and open it in Cowork — it installs with one click.
+**Easiest:** Download the `.skill` file from [Releases](https://github.com/jayweiler/ai-writing-collaboration-guardrails/releases) and open it in Cowork — it installs with one click.
 
 To build the `.skill` file yourself from the repo:
 
@@ -80,7 +80,7 @@ Then open the `.skill` file in Cowork or drag it into a session.
 **Alternative — manual symlink:**
 
 ```bash
-git clone https://github.com/jayweiler/academic-writing-skill.git \
+git clone https://github.com/jayweiler/ai-writing-collaboration-guardrails.git \
   ~/path/to/your/working/copy
 
 mkdir -p ~/Documents/Claude/.skills/skills
@@ -93,7 +93,7 @@ ln -s ~/path/to/your/working/copy/skills/academic-writing \
 If you prefer manual installation over the plugin method:
 
 ```bash
-git clone https://github.com/jayweiler/academic-writing-skill.git \
+git clone https://github.com/jayweiler/ai-writing-collaboration-guardrails.git \
   ~/path/to/your/working/copy
 
 mkdir -p ~/.claude/skills
@@ -116,7 +116,7 @@ Once installed, scaffold a new paper project using the init script:
 
 ```bash
 # Find the skill location (depends on install method)
-# Plugin install: ~/.claude/plugins/academic-writing-skill/skills/academic-writing/
+# Plugin install: ~/.claude/plugins/ai-writing-collaboration-guardrails/skills/academic-writing/
 # Manual install: wherever you cloned/linked it
 
 # Basic setup
@@ -337,7 +337,7 @@ The skill auto-detects whether it's running in Cowork, Claude Code, or a manual 
 ### Repository layout
 
 ```
-academic-writing-skill/
+ai-writing-collaboration-guardrails/
 ├── .claude-plugin/
 │   └── plugin.json                     # Plugin manifest for Claude Code
 ├── skills/
